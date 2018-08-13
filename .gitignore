@@ -1,0 +1,14 @@
+.DS_Store
+.env
+deploy.env
+.lambda
+context.json
+event_sources.json 
+event.json
+**/node_modules/*
+npm-debug.log
+coverage/
+shared/i18n/**/*.php
+styleguide/
+!.gitignore
+/env
