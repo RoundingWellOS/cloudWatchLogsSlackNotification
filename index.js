@@ -1,18 +1,37 @@
 const AWS = require('aws-sdk');
-AWS.config.update({ region: 'us-west-2' });
 
 const encrypted = process.env['SLACK_TOKENS'];
 let decrypted;
-function processEvent(event, context, callback) {
+async function processEvent(event, context, callback) {
     const https = require('https');
     const util = require('util');
     const slackTokens = decrypted
     const alert = event.Records[0].Sns
     const message = JSON.parse(alert.Message)
-    const logGroup = message.Trigger.Namespace
+    const nameSpace = message.Trigger.Namespace
+    const metricName = message.Trigger.MetricName
+    const cloudwatchlogs = new AWS.CloudWatchLogs
+
+    const metricParams = {
+        metricName: metricName,
+        metricNamespace: nameSpace
+      };
+    
+    let metricFiltersLookup
+    try {    
+        metricFiltersLookup = await cloudwatchlogs.describeMetricFilters(metricParams).promise();
+    }
+    catch (err) {
+        console.log(err);
+    }
+
+    logGroupName = metricFiltersLookup.metricFilters[0].logGroupName
+
+    const encodedFilter =  encodeURIComponent(encodeURIComponent(metricFiltersLookup.metricFilters[0].filterPattern));
+    const searchURL = 'https://' + AWS.config.region + '.console.aws.amazon.com/cloudwatch/home?region=' + AWS.config.region + '#logEventViewer:group=' + logGroupName + ';filter=' + encodedFilter + ';start=PT1H'
+    
     const postData = {
         "channel": "#errors",
-        "text": "*" + alert.Subject + "*"
     };
     const severity = "danger";
     const options = {
@@ -25,7 +44,14 @@ function processEvent(event, context, callback) {
     postData.attachments = [
         {
             "color": severity, 
-            "text": 'Alert has been triggered. See https://' + AWS.config.region + '.console.aws.amazon.com/cloudwatch/home?region=' + AWS.config.region + '#logStream:group=' + logGroup + ' for more details.'
+            "text": "*" + alert.Subject + "*",
+            "actions": [
+                {
+                  "type": "button",
+                  "text": "View Events",
+                  "url": searchURL
+                }
+            ]
         }
     ];
 
