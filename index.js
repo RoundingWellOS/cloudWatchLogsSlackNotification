@@ -3,6 +3,9 @@ const AWS = require('aws-sdk');
 const encrypted = process.env['SLACK_TOKENS'];
 let decrypted;
 async function processEvent(event, context, callback) {
+    const endDate = new Date();
+    const startDate = new Date();
+    startDate.setHours(startDate.getHours() - 1);
     const https = require('https');
     const util = require('util');
     const slackTokens = decrypted
@@ -24,12 +27,11 @@ async function processEvent(event, context, callback) {
     catch (err) {
         console.log(err);
     }
-
+    let logGroupName
     logGroupName = metricFiltersLookup.metricFilters[0].logGroupName
 
     const encodedFilter =  encodeURIComponent(encodeURIComponent(metricFiltersLookup.metricFilters[0].filterPattern));
-    const searchURL = 'https://' + AWS.config.region + '.console.aws.amazon.com/cloudwatch/home?region=' + AWS.config.region + '#logEventViewer:group=' + logGroupName + ';filter=' + encodedFilter + ';start=PT1H'
-    
+    const searchURL = 'https://' + AWS.config.region + '.console.aws.amazon.com/cloudwatch/home?region=' + AWS.config.region + '#logEventViewer:group=' + logGroupName + ';filter=' + encodedFilter + ';start=' + startDate + ';end=' + endDate
     const postData = {
         "channel": "#errors",
     };
