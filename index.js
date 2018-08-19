@@ -19,7 +19,7 @@ async function processEvent(event, context, callback) {
         metricName: metricName,
         metricNamespace: nameSpace
       };
-    
+
     let metricFiltersLookup
     try {    
         metricFiltersLookup = await cloudwatchlogs.describeMetricFilters(metricParams).promise();
@@ -27,11 +27,11 @@ async function processEvent(event, context, callback) {
     catch (err) {
         console.log(err);
     }
-    let logGroupName
-    logGroupName = metricFiltersLookup.metricFilters[0].logGroupName
+
+    const logGroupName = metricFiltersLookup.metricFilters[0].logGroupName
 
     const encodedFilter =  encodeURIComponent(encodeURIComponent(metricFiltersLookup.metricFilters[0].filterPattern));
-    const searchURL = 'https://' + AWS.config.region + '.console.aws.amazon.com/cloudwatch/home?region=' + AWS.config.region + '#logEventViewer:group=' + logGroupName + ';filter=' + encodedFilter + ';start=' + startDate + ';end=' + endDate
+    const searchURL = 'https://' + AWS.config.region + '.console.aws.amazon.com/cloudwatch/home?region=' + AWS.config.region + '#logEventViewer:group=' + logGroupName + ';filter=' + encodedFilter + ';start=' + startDate.toISOString() + ';end=' + endDate.toISOString()
     const postData = {
         "channel": "#errors",
     };
@@ -70,6 +70,70 @@ async function processEvent(event, context, callback) {
 
     req.write(util.format("%j", postData));
     req.end();
+
+    const emailList = process.env['EMAILS'].split(',');
+    if ( typeof emailList !== 'undefined' || emailList !== null ) {
+        const fromEmail = process.env['SENDER_ADDRESS']
+        const fromName = process.env['SENDER_NAME']
+
+        const htmlBody = `
+            <!DOCTYPE html>
+            <html>
+            <head>
+            </head>
+            <body>
+                <p>New Alert generated from AWS CloudWatch Logs.</p>
+                <p>
+                    <form action="` + searchURL + `">
+                        <input type="submit" value="View Events" />
+                    </form>
+                </p>
+            </body>
+            </html>
+        `;
+
+        const textBody = `
+            New Alert generated from AWS CloudWatch Logs.
+            Click the link to view the events in the browser:` + searchURL;
+
+        const emailParams = {
+            Destination: {
+            ToAddresses: emailList
+            },
+            Message: {
+            Body: {
+                Html: {
+                Charset: "UTF-8",
+                Data: htmlBody
+                },
+                Text: {
+                Charset: "UTF-8",
+                Data: textBody
+                }
+            },
+            Subject: {
+                Charset: "UTF-8",
+                Data: alert.Subject
+            }
+            },
+            Source: fromName + " <" + fromEmail + ">"
+        };
+
+        const sendPromise = new AWS.SES({ apiVersion: "2010-12-01" })
+        .sendEmail(emailParams)
+        .promise();
+
+        // Handle promise's fulfilled/rejected states
+        sendPromise
+        .then(data => {
+            console.log(data.MessageId);
+            context.done(null, "Success");
+        })
+            .catch(err => {
+            console.error(err, err.stack);
+            context.done(null, "Failed");
+        });
+    }
 };
 
 exports.handler = (event, context, callback) => {
